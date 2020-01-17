@@ -4,9 +4,10 @@
 package main
 
 import (
-	"go.mozilla.org/sops/decrypt"
 	"log"
 	"path/filepath"
+
+	"go.mozilla.org/sops/decrypt"
 	"sigs.k8s.io/kustomize/v3/pkg/ifc"
 	"sigs.k8s.io/kustomize/v3/pkg/resmap"
 	"sigs.k8s.io/kustomize/v3/pkg/types"
@@ -17,7 +18,7 @@ type plugin struct {
 	ldr                    ifc.Loader
 	rf                     *resmap.Factory
 	types.GeneratorOptions `json:"generatorOptions,omitempty" yaml:"generatorOptions,omitempty"`
-	types.SecretArgs
+	types.ConfigMapArgs
 
 	Name      string `json:"name,omitempty" yaml:"name,omitempty"`
 	Namespace string `json:"namespace,omitempty" yaml:"namespace,omitempty"`
@@ -26,13 +27,14 @@ type plugin struct {
 	Keys []string `json:"keys,omitempty" yaml:"keys,omitempty"`
 }
 
+// KustomizePlugin ...
 //noinspection GoUnusedGlobalVariable
 //nolint: golint
 var KustomizePlugin plugin
 
 func (p *plugin) Config(
 	ldr ifc.Loader, rf *resmap.Factory, c []byte) error {
-	p.SecretArgs = types.SecretArgs{}
+	p.ConfigMapArgs = types.ConfigMapArgs{}
 	p.GeneratorOptions = types.GeneratorOptions{}
 	p.rf = rf
 	p.ldr = ldr
@@ -41,9 +43,8 @@ func (p *plugin) Config(
 
 // (root string, args []string) (map[string]string, error) {
 func (p *plugin) Generate() (resmap.ResMap, error) {
-	args := types.SecretArgs{}
+	args := types.ConfigMapArgs{}
 	args.Name = p.Name
-	args.Type = p.Type
 	args.Namespace = p.Namespace
 	args.GeneratorArgs.Behavior = "merge"
 
@@ -52,15 +53,15 @@ func (p *plugin) Generate() (resmap.ResMap, error) {
 	}
 
 	secret := make(map[string]string)
-	secret_file := filepath.Join(p.ldr.Root(), p.Source)
+	secretFile := filepath.Join(p.ldr.Root(), p.Source)
 
-	v, err := decrypt.File(secret_file, "yaml")
+	v, err := decrypt.File(secretFile, "yaml")
 	if err != nil {
-		log.Fatalf("error: cannot decode file %s :: %v", secret_file, err)
+		log.Fatalf("error: cannot decode file %s :: %v", secretFile, err)
 	}
 	err = yaml.Unmarshal([]byte(v), &secret)
 	if err != nil {
-		log.Fatalf("error: cannot unmarshal %s as yaml :: %v", secret_file, err)
+		log.Fatalf("error: cannot unmarshal %s as yaml :: %v", secretFile, err)
 	}
 
 	if len(p.Keys) == 0 {
@@ -74,9 +75,9 @@ func (p *plugin) Generate() (resmap.ResMap, error) {
 		if ok {
 			args.LiteralSources = append(args.LiteralSources, k+"="+v)
 		} else {
-			log.Fatalf("error: key <%s> not present in %s\n", k, secret_file)
+			log.Fatalf("error: key <%s> not present in %s\n", k, secretFile)
 		}
 	}
 
-	return p.rf.FromSecretArgs(p.ldr, &p.GeneratorOptions, args)
+	return p.rf.FromConfigMapArgs(p.ldr, &p.GeneratorOptions, args)
 }
